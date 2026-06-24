@@ -1,0 +1,6 @@
+{
+  "name": "LG Projector Settings",
+  "render_readme": true,
+  "hacs": "1.6.0",
+  "zip_release": false
+}

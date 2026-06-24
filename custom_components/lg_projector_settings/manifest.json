@@ -1,0 +1,12 @@
+{
+  "domain": "lg_projector_settings",
+  "name": "LG Projector Settings",
+  "codeowners": ["@nalter"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/nalter/lg_projector_brightness",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/nalter/lg_projector_brightness/issues",
+  "requirements": ["aiowebostv>=0.3.3"],
+  "version": "1.0.0"
+}
