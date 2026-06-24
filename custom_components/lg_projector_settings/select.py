@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN, CONF_HOST, PICTURE_MODES
+from .const import DOMAIN, CONF_HOST, PICTURE_MODES, SDR_MODES, HDR_MODES, DOLBY_VISION_MODES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,20 +51,17 @@ class LgProjectorPictureMode(SelectEntity):
             if "pictureMode" in settings:
                 mode = settings["pictureMode"]
                 
-                # Determine if currently in HDR mode
-                is_hdr = mode.lower().startswith("hdr") or "dolby" in mode.lower()
-                
-                # Filter available options based on SDR/HDR state
-                if is_hdr:
-                    valid_options = [m for m in PICTURE_MODES if m.lower().startswith("hdr") or "dolby" in m.lower()]
+                # Determine which category the current mode belongs to
+                if mode in DOLBY_VISION_MODES or "dolby" in mode.lower():
+                    valid_options = DOLBY_VISION_MODES.copy()
+                elif mode in HDR_MODES or mode.lower().startswith("hdr") or "hdr" in mode.lower():
+                    valid_options = HDR_MODES.copy()
                 else:
-                    valid_options = [m for m in PICTURE_MODES if not (m.lower().startswith("hdr") or "dolby" in m.lower())]
+                    valid_options = SDR_MODES.copy()
                 
                 # Add it to options if it's an unknown mode the TV reported
                 if mode not in valid_options:
                     valid_options.append(mode)
-                    if mode not in PICTURE_MODES:
-                        PICTURE_MODES.append(mode)
                         
                 self._attr_options = valid_options
                 self._attr_current_option = mode
