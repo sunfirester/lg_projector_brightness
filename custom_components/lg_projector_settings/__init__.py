@@ -14,7 +14,7 @@ from .const import DOMAIN, CONF_KEY
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.NUMBER, Platform.SELECT]
+PLATFORMS: list[Platform] = [Platform.SELECT]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up LG Projector Settings from a config entry."""
