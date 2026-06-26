@@ -75,7 +75,19 @@ class LgProjectorPictureMode(SelectEntity):
             params = {"category": "picture", "settings": {"pictureMode": option}}
             
             await self._async_luna_request(uri, params)
-            self._attr_current_option = option
+            
+            # The luna request trick doesn't return success/failure
+            # Wait a moment for the projector to apply the setting, then poll to verify
+            import asyncio
+            await asyncio.sleep(1)
+            await self.async_update()
+            
+            if self._attr_current_option != option:
+                _LOGGER.warning(
+                    "Set picture mode to %s may have failed, current mode is %s", 
+                    option, 
+                    self._attr_current_option
+                )
         except Exception as e:
             _LOGGER.error("Failed to set picture mode to %s: %s", option, e)
 
