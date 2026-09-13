@@ -7,7 +7,7 @@ CONF_KEY = "key"
 
 # Categorized picture modes for LG WebOS
 SDR_MODES = [
-    "normal", "eco", "cinema", "sports", "game", 
+    "normal", "standard", "eco", "cinema", "sports", "game", 
     "expert1", "expert2", "filmMaker", "filmmaker", "vivid", "photo", "technicolor"
 ]
 
