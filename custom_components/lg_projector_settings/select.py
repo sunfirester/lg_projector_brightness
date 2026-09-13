@@ -77,6 +77,17 @@ class LgProjectorPictureMode(SelectEntity):
             self._attr_available = True
             settings = ret.get("settings", {})
             mode = settings.get("pictureMode")
+            
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "notification_id": "lg_projector_debug",
+                    "title": "LG Projector Settings Debug",
+                    "message": f"ret={ret}",
+                },
+            )
+
             if mode and isinstance(mode, str) and mode.strip():
                 mode = mode.strip()
                 # Determine which category the current mode belongs to
@@ -94,7 +105,16 @@ class LgProjectorPictureMode(SelectEntity):
                 self._attr_options = valid_options
                 self._attr_current_option = mode
         except Exception as e:
-            _LOGGER.debug("Failed to fetch picture mode settings from %s: %s", self._host, e)
+            _LOGGER.warning("Failed to fetch picture mode settings from %s: %s (%s)", self._host, e, type(e))
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "notification_id": "lg_projector_debug",
+                    "title": "LG Projector Settings Debug Error",
+                    "message": f"Error: {type(e).__name__}: {e}",
+                },
+            )
             if not self._client.is_connected():
                 self._attr_available = False
 
