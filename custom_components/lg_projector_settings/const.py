@@ -5,6 +5,13 @@ DOMAIN = "lg_projector_settings"
 CONF_HOST = "host"
 CONF_KEY = "key"
 
+CONF_HDR_SENSOR = "hdr_sensor"
+CONF_HDR_VALUE = "hdr_value"
+CONF_DOLBY_VISION_VALUE = "dolby_vision_value"
+
+DEFAULT_HDR_VALUE = "on, true, hdr, hdr10"
+DEFAULT_DOLBY_VISION_VALUE = "dolby, dolby_vision, dovi"
+
 # Categorized picture modes for LG WebOS
 SDR_MODES = [
     "normal", "standard", "eco", "cinema", "sports", "game", 

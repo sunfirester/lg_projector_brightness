@@ -10,7 +10,18 @@ from homeassistant.data_entry_flow import FlowResult
 
 import aiowebostv
 
-from .const import DOMAIN, CONF_KEY
+from homeassistant.core import callback
+from homeassistant.helpers import selector
+
+from .const import (
+    DOMAIN,
+    CONF_KEY,
+    CONF_HDR_SENSOR,
+    CONF_HDR_VALUE,
+    CONF_DOLBY_VISION_VALUE,
+    DEFAULT_HDR_VALUE,
+    DEFAULT_DOLBY_VISION_VALUE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,6 +37,14 @@ class LgProjectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
         """Initialize the config flow."""
         self.host = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Get the options flow for this handler."""
+        return LgProjectorOptionsFlowHandler(config_entry)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -78,3 +97,44 @@ class LgProjectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="pairing", errors=errors
         )
+
+class LgProjectorOptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle options flow for LG Projector Settings."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        current_options = self.config_entry.options
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_HDR_SENSOR,
+                    description={"suggested_value": current_options.get(CONF_HDR_SENSOR)},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig()
+                ),
+                vol.Optional(
+                    CONF_HDR_VALUE,
+                    default=current_options.get(CONF_HDR_VALUE, DEFAULT_HDR_VALUE),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig()
+                ),
+                vol.Optional(
+                    CONF_DOLBY_VISION_VALUE,
+                    default=current_options.get(CONF_DOLBY_VISION_VALUE, DEFAULT_DOLBY_VISION_VALUE),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig()
+                ),
+            }
+        )
+
+        return self.async_show_form(step_id="init", data_schema=schema)

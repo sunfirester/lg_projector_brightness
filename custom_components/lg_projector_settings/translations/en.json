@@ -21,5 +21,18 @@
     "abort": {
       "already_configured": "Device is already configured"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure LG Projector Settings",
+        "description": "Configure an optional HDR sensor to dynamically filter the picture mode dropdown (SDR vs HDR vs Dolby Vision). If the sensor is unknown, unavailable, or not set, all modes are shown.",
+        "data": {
+          "hdr_sensor": "HDR Detection Entity",
+          "hdr_value": "HDR State Values (comma-separated)",
+          "dolby_vision_value": "Dolby Vision State Values (comma-separated)"
+        }
+      }
+    }
   }
 }

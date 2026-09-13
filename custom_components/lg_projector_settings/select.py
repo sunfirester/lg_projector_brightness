@@ -5,11 +5,26 @@ import logging
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, CONF_HOST, PICTURE_MODES, SDR_MODES, HDR_MODES, DOLBY_VISION_MODES
+from .const import (
+    CONF_DOLBY_VISION_VALUE,
+    CONF_HDR_SENSOR,
+    CONF_HDR_VALUE,
+    CONF_HOST,
+    DEFAULT_DOLBY_VISION_VALUE,
+    DEFAULT_HDR_VALUE,
+    DOLBY_VISION_MODES,
+    DOMAIN,
+    HDR_MODES,
+    PICTURE_MODES,
+    SDR_MODES,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,9 +39,9 @@ async def async_setup_entry(
     client = hass.data[DOMAIN][entry.entry_id]
     host = entry.data[CONF_HOST]
 
-    async_add_entities([LgProjectorPictureMode(client, host, entry.entry_id)])
+    async_add_entities([LgProjectorPictureMode(client, host, entry)])
 
-class LgProjectorPictureMode(SelectEntity):
+class LgProjectorPictureMode(SelectEntity, RestoreEntity):
     """Representation of the LG Projector Picture Mode select entity."""
 
     _attr_has_entity_name = True
@@ -35,18 +50,88 @@ class LgProjectorPictureMode(SelectEntity):
     _attr_icon = "mdi:television-guide"
     _attr_should_poll = True
 
-    def __init__(self, client, host, entry_id):
+    def __init__(self, client, host, entry: ConfigEntry):
         """Initialize the select entity."""
         self._client = client
         self._host = host
-        self._attr_unique_id = f"{entry_id}_picture_mode"
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_picture_mode"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry_id)},
+            identifiers={(DOMAIN, entry.entry_id)},
             name=f"LG Projector ({host})",
             manufacturer="LG",
         )
         self._attr_current_option = None
         self._attr_available = client.is_connected()
+        self._hdr_sensor = entry.options.get(CONF_HDR_SENSOR)
+        self._hdr_values = [
+            v.strip().lower()
+            for v in entry.options.get(CONF_HDR_VALUE, DEFAULT_HDR_VALUE).split(",")
+            if v.strip()
+        ]
+        self._dolby_values = [
+            v.strip().lower()
+            for v in entry.options.get(
+                CONF_DOLBY_VISION_VALUE, DEFAULT_DOLBY_VISION_VALUE
+            ).split(",")
+            if v.strip()
+        ]
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity added to Home Assistant."""
+        await super().async_added_to_hass()
+
+        # Restore previous selection across restarts
+        if (last_state := await self.async_get_last_state()) is not None:
+            if (
+                last_state.state
+                and last_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+            ):
+                self._attr_current_option = last_state.state
+
+        # Track external HDR sensor if configured
+        if self._hdr_sensor:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, [self._hdr_sensor], self._async_hdr_sensor_changed
+                )
+            )
+            # Evaluate initial state of HDR sensor
+            if sensor_state := self.hass.states.get(self._hdr_sensor):
+                self._update_options_from_hdr_state(sensor_state.state)
+            else:
+                self._update_options_from_hdr_state(None)
+        else:
+            self._update_options_from_hdr_state(None)
+
+    @callback
+    def _async_hdr_sensor_changed(self, event: Event[EventStateChangedData]) -> None:
+        """Handle state change of the configured HDR sensor."""
+        new_state = event.data.get("new_state")
+        state_str = new_state.state if new_state else None
+        self._update_options_from_hdr_state(state_str)
+        self.async_write_ha_state()
+
+    def _update_options_from_hdr_state(self, state_str: str | None) -> None:
+        """Update available options based on HDR sensor state."""
+        if not state_str or state_str.lower() in (STATE_UNKNOWN, STATE_UNAVAILABLE, "none", ""):
+            # Fallback: sensor is unknown, unavailable, or not configured -> show all modes
+            valid_options = PICTURE_MODES.copy()
+        else:
+            normalized = state_str.strip().lower()
+            if any(val == normalized or val in normalized for val in self._dolby_values):
+                valid_options = DOLBY_VISION_MODES.copy()
+            elif any(val == normalized or val in normalized for val in self._hdr_values):
+                valid_options = HDR_MODES.copy()
+            else:
+                # Sensor is reported active/valid, but not HDR/Dolby -> SDR mode
+                valid_options = SDR_MODES.copy()
+
+        # Ensure currently selected option is preserved in the dropdown so HA doesn't discard it
+        if self._attr_current_option and self._attr_current_option not in valid_options:
+            valid_options.append(self._attr_current_option)
+
+        self._attr_options = valid_options
 
     async def _async_ensure_connected(self) -> bool:
         """Ensure the client is connected to the projector."""
@@ -68,56 +153,11 @@ class LgProjectorPictureMode(SelectEntity):
             return False
 
     async def async_update(self) -> None:
-        """Fetch the latest state of the picture mode."""
+        """Check connection state and maintain availability."""
         if not await self._async_ensure_connected():
             return
 
-        try:
-            payload = {"category": "picture", "keys": ["pictureMode"]}
-            ret = await self._client.request("settings/getSystemSettings", payload=payload)
-            self._attr_available = True
-            settings = ret.get("settings", {})
-            mode = settings.get("pictureMode")
-            
-            await self.hass.services.async_call(
-                "persistent_notification",
-                "create",
-                {
-                    "notification_id": "lg_projector_debug",
-                    "title": "LG Projector Settings Debug",
-                    "message": f"ret={ret}",
-                },
-            )
-
-            if mode and isinstance(mode, str) and mode.strip():
-                mode = mode.strip()
-                # Determine which category the current mode belongs to
-                if mode in DOLBY_VISION_MODES or "dolby" in mode.lower():
-                    valid_options = DOLBY_VISION_MODES.copy()
-                elif mode in HDR_MODES or mode.lower().startswith("hdr") or "hdr" in mode.lower():
-                    valid_options = HDR_MODES.copy()
-                else:
-                    valid_options = SDR_MODES.copy()
-                
-                # Add it to options if it's an unknown mode the TV reported
-                if mode not in valid_options:
-                    valid_options.append(mode)
-                        
-                self._attr_options = valid_options
-                self._attr_current_option = mode
-        except Exception as e:
-            _LOGGER.warning("Failed to fetch picture mode settings from %s: %s (%s)", self._host, e, type(e))
-            await self.hass.services.async_call(
-                "persistent_notification",
-                "create",
-                {
-                    "notification_id": "lg_projector_debug",
-                    "title": "LG Projector Settings Debug Error",
-                    "message": f"Error: {type(e).__name__}: {e}",
-                },
-            )
-            if not self._client.is_connected():
-                self._attr_available = False
+        self._attr_available = True
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
@@ -133,19 +173,20 @@ class LgProjectorPictureMode(SelectEntity):
             
             # Optimistically update current option so UI immediately reflects change
             self._attr_current_option = option
-            self.async_write_ha_state()
 
-            # Wait a moment for the projector to apply the setting, then poll to verify
-            await asyncio.sleep(1)
-            await self.async_update()
+            # If no external HDR sensor is configured, dynamically adapt options to selected mode's category
+            if not self._hdr_sensor:
+                if option in DOLBY_VISION_MODES or "dolby" in option.lower():
+                    valid_options = DOLBY_VISION_MODES.copy()
+                elif option in HDR_MODES or option.lower().startswith("hdr") or "hdr" in option.lower():
+                    valid_options = HDR_MODES.copy()
+                else:
+                    valid_options = SDR_MODES.copy()
+                if option not in valid_options:
+                    valid_options.append(option)
+                self._attr_options = valid_options
+
             self.async_write_ha_state()
-            
-            if self._attr_current_option != option:
-                _LOGGER.warning(
-                    "Set picture mode to %s may have failed, current mode is %s", 
-                    option, 
-                    self._attr_current_option
-                )
         except Exception as e:
             _LOGGER.error("Failed to set picture mode to %s: %s", option, e)
 
