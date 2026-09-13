@@ -33,6 +33,7 @@ class LgProjectorPictureMode(SelectEntity):
     _attr_name = "Picture Mode"
     _attr_options = PICTURE_MODES
     _attr_icon = "mdi:television-guide"
+    _attr_should_poll = True
 
     def __init__(self, client, host, entry_id):
         """Initialize the select entity."""
@@ -130,10 +131,14 @@ class LgProjectorPictureMode(SelectEntity):
             
             await self._async_luna_request(uri, params)
             
-            # The luna request trick doesn't return success/failure
+            # Optimistically update current option so UI immediately reflects change
+            self._attr_current_option = option
+            self.async_write_ha_state()
+
             # Wait a moment for the projector to apply the setting, then poll to verify
             await asyncio.sleep(1)
             await self.async_update()
+            self.async_write_ha_state()
             
             if self._attr_current_option != option:
                 _LOGGER.warning(
