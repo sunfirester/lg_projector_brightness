@@ -5,7 +5,7 @@ CLOSE_TOAST = "system.notifications/closeToast"
 CREATE_ALERT = "system.notifications/createAlert"
 CLOSE_ALERT = "system.notifications/closeAlert"
 
-STATIC_PROJECTOR_IP = "192.168.20.117"
+STATIC_PROJECTOR_IP = "192.168.1.100"
 
 def setup_connection():
     if len(input_text.projector_secret_helper) > 10:
